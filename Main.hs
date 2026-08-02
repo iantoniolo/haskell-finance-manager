@@ -1,11 +1,10 @@
+-- Projeto da disciplina de Programacao Funcional
 -- Sistema de Controle Financeiro Pessoal
--- Projeto da disciplina de Programacao Funcional -- Haskell puro (so o pacote base)
 --
 -- Compilar: ghc Main.hs -o controle && ./controle
 -- Executar: runghc Main.hs
 
 module Main where
-
 
 -- ============================================================
 -- 1. TIPOS PERSONALIZADOS
