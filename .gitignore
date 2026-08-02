@@ -1,0 +1,14 @@
+# Binario compilado
+controle
+*.exe
+
+# Artefatos de compilacao do GHC
+*.o
+*.hi
+*.dyn_o
+*.dyn_hi
+dist-newstyle/
+.stack-work/
+
+# Sistema operacional
+.DS_Store

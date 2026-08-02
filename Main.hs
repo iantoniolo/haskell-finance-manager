@@ -6,6 +6,8 @@
 
 module Main where
 
+import Text.Printf (printf)
+
 -- ============================================================
 -- 1. TIPOS PERSONALIZADOS
 -- ============================================================
@@ -26,7 +28,42 @@ data Transacao = Transacao
 
 
 -- ============================================================
--- 2. DADOS DE EXEMPLO
+-- 2. FORMATACAO (funcoes puras que so montam Strings)
+-- ============================================================
+
+formatarValor :: Double -> String
+formatarValor v = printf "R$ %.2f" v
+
+linha :: String
+linha = replicate 45 '-'
+
+textoTransacao :: Transacao -> String
+textoTransacao t =
+    unlines
+        [ show (tipo t)
+        , "Descricao: " ++ descricao t
+        , "Valor....: " ++ formatarValor (valor t)
+        , "Categoria: " ++ categoria t
+        , "Data.....: " ++ dataTransacao t
+        ]
+
+
+-- ============================================================
+-- 3. EXIBICAO NA TELA (IO)
+-- ============================================================
+
+-- impressao recursiva
+listarTransacoes :: [Transacao] -> IO ()
+listarTransacoes []          = putStrLn "Nenhuma transacao cadastrada ainda."
+listarTransacoes [t]         = putStr (textoTransacao t)
+listarTransacoes (t : resto) = do
+    putStr (textoTransacao t)
+    putStrLn linha
+    listarTransacoes resto
+
+
+-- ============================================================
+-- 4. DADOS DE EXEMPLO
 -- ============================================================
 
 transacoesExemplo :: [Transacao]
@@ -37,10 +74,11 @@ transacoesExemplo =
 
 
 -- ============================================================
--- 3. PONTO DE ENTRADA
+-- 5. PONTO DE ENTRADA
 -- ============================================================
 
 main :: IO ()
 main = do
     putStrLn "Controle Financeiro Pessoal"
-    mapM_ print transacoesExemplo
+    putStrLn ""
+    listarTransacoes transacoesExemplo
