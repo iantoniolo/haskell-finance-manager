@@ -63,6 +63,24 @@ totalDespesas ts = somaValores (despesas ts)
 calcularSaldo :: [Transacao] -> Double
 calcularSaldo ts = totalReceitas ts - totalDespesas ts
 
+-- Maybe
+maiorGasto :: [Transacao] -> Maybe Transacao
+maiorGasto ts = maiorDaLista (despesas ts)
+  where
+    maiorDaLista []            = Nothing
+    maiorDaLista [t]           = Just t
+    maiorDaLista (t : resto)   =
+        case maiorDaLista resto of
+            Just m | valor m > valor t -> Just m
+            _                          -> Just t
+
+mediaDespesas :: [Transacao] -> Double
+mediaDespesas ts
+    | contar ds == 0 = 0
+    | otherwise      = somaValores ds / fromIntegral (contar ds)
+  where
+    ds = despesas ts
+
 
 -- 3. FORMATACAO (funcoes que montam Strings)
 formatCurrency :: Double -> String
@@ -94,6 +112,15 @@ exibirTransacoes (t : resto) = do
     putStrLn ""
     exibirTransacoes resto
 
+exibirMaiorGasto :: [Transacao] -> IO ()
+exibirMaiorGasto ts =
+    case maiorGasto ts of
+        Nothing -> putStrLn "Nenhuma despesa cadastrada."
+        Just t  -> do
+            putStrLn ("Descricao : " ++ descricao t)
+            putStrLn ("Categoria : " ++ categoria t)
+            putStrLn ("Valor     : " ++ formatCurrency (valor t))
+
 
 -- 5. DADOS DE EXEMPLO
 transacoesIniciais :: [Transacao]
@@ -120,3 +147,8 @@ main = do
     putStrLn ("Total de receitas      : " ++ formatCurrency (totalReceitas transacoesIniciais))
     putStrLn ("Total de despesas      : " ++ formatCurrency (totalDespesas transacoesIniciais))
     putStrLn ("Saldo atual            : " ++ formatCurrency (calcularSaldo transacoesIniciais))
+    putStrLn ("Media de gastos        : " ++ formatCurrency (mediaDespesas transacoesIniciais))
+    putStrLn ""
+    putStrLn "--- Maior gasto ---"
+    exibirMaiorGasto transacoesIniciais
+    putStrLn ""
