@@ -10,6 +10,7 @@ import Data.Char   (isSpace)
 import System.IO   (hFlush, hSetEncoding, stdin, stdout, utf8)
 import Text.Printf (printf)
 
+
 -- ============================================================
 -- 1. TIPOS PERSONALIZADOS
 -- ============================================================
@@ -76,6 +77,7 @@ maiorGasto ts = maiorDaLista (despesas ts)
         case maiorDaLista resto of
             Just m | valor m > valor t -> Just m
             _                          -> Just t
+
 
 mediaDespesas :: [Transacao] -> Double
 mediaDespesas ts
@@ -197,7 +199,80 @@ mostrarMaiorGasto ts =
 
 
 -- ============================================================
--- 5. DADOS DE EXEMPLO
+-- 5. MENU E LOOP PRINCIPAL
+-- ============================================================
+
+menu :: IO ()
+menu = putStr (unlines
+    [ ""
+    , "======== CONTROLE FINANCEIRO PESSOAL ========"
+    , " 1 - Cadastrar receita"
+    , " 2 - Cadastrar despesa"
+    , " 3 - Listar todas as transacoes"
+    , " 4 - Mostrar saldo atual"
+    , " 5 - Mostrar total de receitas"
+    , " 6 - Mostrar total de despesas"
+    , " 7 - Mostrar maior gasto"
+    , " 8 - Mostrar media de gastos"
+    , " 0 - Sair"
+    , "============================================="
+    ])
+
+-- A lista e o argumento da funcao
+-- Recursao com a lista nova a cada chamada
+loop :: [Transacao] -> IO ()
+loop ts = do
+    menu
+    opcao <- lerLinha "Escolha uma opcao: "
+    putStrLn ""
+    case aparar opcao of
+
+        "1" -> do
+            novaLista <- adicionarReceita ts
+            loop novaLista
+
+        "2" -> do
+            novaLista <- adicionarDespesa ts
+            loop novaLista
+
+        "3" -> do
+            putStrLn "--- TODAS AS TRANSACOES ---"
+            listarTransacoes ts
+            loop ts
+
+        "4" -> do
+            putStrLn ("Saldo atual: " ++ formatarValor (calcularSaldo ts))
+            loop ts
+
+        "5" -> do
+            putStrLn ("Total de receitas : " ++ formatarValor (totalReceitas ts))
+            putStrLn ("Quantidade        : " ++ show (contar (receitas ts)))
+            loop ts
+
+        "6" -> do
+            putStrLn ("Total de despesas : " ++ formatarValor (totalDespesas ts))
+            putStrLn ("Quantidade        : " ++ show (contar (despesas ts)))
+            loop ts
+
+        "7" -> do
+            putStrLn "--- MAIOR GASTO ---"
+            mostrarMaiorGasto ts
+            loop ts
+
+        "8" -> do
+            putStrLn ("Media de gastos : " ++ formatarValor (mediaDespesas ts))
+            putStrLn ("Quantidade      : " ++ show (contar (despesas ts)))
+            loop ts
+
+        "0" -> putStrLn "Encerrando o sistema. Ate logo!"
+
+        _   -> do
+            putStrLn "Opcao invalida! Digite um numero de 0 a 8."
+            loop ts
+
+
+-- ============================================================
+-- 6. DADOS DE EXEMPLO (troque por [] em main para comecar vazio)
 -- ============================================================
 
 transacoesExemplo :: [Transacao]
@@ -212,29 +287,13 @@ transacoesExemplo =
 
 
 -- ============================================================
--- 6. PONTO DE ENTRADA
+-- 7. PONTO DE ENTRADA
 -- ============================================================
 
 main :: IO ()
 main = do
     hSetEncoding stdout utf8
     hSetEncoding stdin  utf8
-    putStrLn ""
-    putStrLn "Controle Financeiro Pessoal"
-    putStrLn ""
-    -- teste do cadastro: pede uma receita e uma despesa novas
-    ts1 <- adicionarReceita transacoesExemplo
-    ts2 <- adicionarDespesa ts1
-    putStrLn ""
-    listarTransacoes transacoesExemplo
-    putStrLn ""
-    putStrLn ("Quantidade de receitas : " ++ show (contar (receitas transacoesExemplo)))
-    putStrLn ("Quantidade de despesas : " ++ show (contar (despesas transacoesExemplo)))
-    putStrLn ("Total de receitas      : " ++ formatarValor (totalReceitas transacoesExemplo))
-    putStrLn ("Total de despesas      : " ++ formatarValor (totalDespesas transacoesExemplo))
-    putStrLn ("Saldo atual            : " ++ formatarValor (calcularSaldo transacoesExemplo))
-    putStrLn ("Media de gastos        : " ++ formatarValor (mediaDespesas transacoesExemplo))
-    putStrLn ""
-    putStrLn "--- Maior gasto ---"
-    mostrarMaiorGasto transacoesExemplo
-    putStrLn ""
+    putStrLn "Bem-vindo(a) ao Controle Financeiro Pessoal!"
+    putStrLn "(o sistema ja inicia com algumas transacoes de exemplo)"
+    loop transacoesExemplo
