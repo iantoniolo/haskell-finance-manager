@@ -10,6 +10,7 @@ import Data.Char   (isSpace)
 import System.IO   (hFlush, hSetEncoding, stdin, stdout, utf8)
 import Text.Printf (printf)
 
+
 -- 1. TIPOS PERSONALIZADOS
 data TipoTransacao
     = Receita
@@ -75,6 +76,7 @@ maiorGasto ts = maiorDaLista (despesas ts)
         case maiorDaLista resto of
             Just m | valor m > valor t -> Just m
             _                          -> Just t
+
 
 mediaDespesas :: [Transacao] -> Double
 mediaDespesas ts
@@ -188,7 +190,77 @@ exibirMaiorGasto ts =
             putStrLn ("Valor     : " ++ formatCurrency (valor t))
 
 
--- 5. DADOS DE EXEMPLO
+-- 5. MENU E LOOP PRINCIPAL
+menu :: IO ()
+menu = putStr (unlines
+    [ ""
+    , "======== CONTROLE FINANCEIRO PESSOAL ========"
+    , " 1 - Cadastrar receita"
+    , " 2 - Cadastrar despesa"
+    , " 3 - Listar todas as transacoes"
+    , " 4 - Mostrar saldo atual"
+    , " 5 - Mostrar total de receitas"
+    , " 6 - Mostrar total de despesas"
+    , " 7 - Mostrar maior gasto"
+    , " 8 - Mostrar media de gastos"
+    , " 0 - Sair"
+    , "============================================="
+    ])
+
+-- A lista e o argumento da funcao
+-- Recursao com a lista nova a cada chamada
+loop :: [Transacao] -> IO ()
+loop ts = do
+    menu
+    opcao <- lerLinha "Escolha uma opcao: "
+    putStrLn ""
+    case aparar opcao of
+
+        "1" -> do
+            novaLista <- adicionarReceita ts
+            loop novaLista
+
+        "2" -> do
+            novaLista <- adicionarDespesa ts
+            loop novaLista
+
+        "3" -> do
+            putStrLn "--- TODAS AS TRANSACOES ---"
+            exibirTransacoes ts
+            loop ts
+
+        "4" -> do
+            putStrLn ("Saldo atual: " ++ formatCurrency (calcularSaldo ts))
+            loop ts
+
+        "5" -> do
+            putStrLn ("Total de receitas : " ++ formatCurrency (totalReceitas ts))
+            putStrLn ("Quantidade        : " ++ show (contar (receitas ts)))
+            loop ts
+
+        "6" -> do
+            putStrLn ("Total de despesas : " ++ formatCurrency (totalDespesas ts))
+            putStrLn ("Quantidade        : " ++ show (contar (despesas ts)))
+            loop ts
+
+        "7" -> do
+            putStrLn "--- MAIOR GASTO ---"
+            exibirMaiorGasto ts
+            loop ts
+
+        "8" -> do
+            putStrLn ("Media de gastos : " ++ formatCurrency (mediaDespesas ts))
+            putStrLn ("Quantidade      : " ++ show (contar (despesas ts)))
+            loop ts
+
+        "0" -> putStrLn "Encerrando o sistema. Ate logo!"
+
+        _   -> do
+            putStrLn "Opcao invalida! Digite um numero de 0 a 8."
+            loop ts
+
+
+-- 6. DADOS DE EXEMPLO (troque por [] em main para comecar vazio)
 transacoesIniciais :: [Transacao]
 transacoesIniciais =
     [ Transacao "Salario"        3500.00 "Trabalho"     "05/06/2026" Receita
@@ -200,27 +272,11 @@ transacoesIniciais =
     ]
 
 
--- 6. PONTO DE ENTRADA
+-- 7. PONTO DE ENTRADA
 main :: IO ()
 main = do
     hSetEncoding stdout utf8
     hSetEncoding stdin  utf8
-    putStrLn ""
-    putStrLn "Controle Financeiro Pessoal"
-    putStrLn ""
-    -- teste do cadastro: pede uma receita e uma despesa novas
-    ts1 <- adicionarReceita transacoesIniciais
-    ts2 <- adicionarDespesa ts1
-    putStrLn ""
-    exibirTransacoes transacoesIniciais
-    putStrLn ""
-    putStrLn ("Quantidade de receitas : " ++ show (contar (receitas transacoesIniciais)))
-    putStrLn ("Quantidade de despesas : " ++ show (contar (despesas transacoesIniciais)))
-    putStrLn ("Total de receitas      : " ++ formatCurrency (totalReceitas transacoesIniciais))
-    putStrLn ("Total de despesas      : " ++ formatCurrency (totalDespesas transacoesIniciais))
-    putStrLn ("Saldo atual            : " ++ formatCurrency (calcularSaldo transacoesIniciais))
-    putStrLn ("Media de gastos        : " ++ formatCurrency (mediaDespesas transacoesIniciais))
-    putStrLn ""
-    putStrLn "--- Maior gasto ---"
-    exibirMaiorGasto transacoesIniciais
-    putStrLn ""
+    putStrLn "Bem-vindo(a) ao Controle Financeiro Pessoal!"
+    putStrLn "(o sistema ja inicia com algumas transacoes de exemplo)"
+    loop transacoesIniciais
