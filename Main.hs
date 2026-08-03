@@ -6,6 +6,8 @@
 
 module Main where
 
+import Data.Char   (isSpace)
+import System.IO   (hFlush, hSetEncoding, stdin, stdout, utf8)
 import Text.Printf (printf)
 
 -- ============================================================
@@ -105,8 +107,73 @@ textoTransacao t =
 
 
 -- ============================================================
--- 4. EXIBICAO NA TELA (IO)
+-- 4. ENTRADA E SAIDA (IO)
 -- ============================================================
+
+lerLinha :: String -> IO String
+lerLinha pergunta = do
+    putStr pergunta
+    hFlush stdout
+    getLine
+
+-- remove espacos das pontas
+aparar :: String -> String
+aparar texto = tirar (tirar texto)
+  where
+    tirar = reverse . dropWhile isSpace
+
+-- verificação null
+lerTexto :: String -> IO String
+lerTexto pergunta = do
+    entrada <- lerLinha pergunta
+    let texto = aparar entrada
+    if null texto
+        then do
+            putStrLn "  ! Campo obrigatorio, tente novamente."
+            lerTexto pergunta
+        else return texto
+
+-- read
+lerValor :: String -> IO Double
+lerValor pergunta = do
+    entrada <- lerLinha pergunta
+    case reads (trocarVirgula (aparar entrada)) :: [(Double, String)] of
+        [(v, "")] | v > 0 -> return v
+        _ -> do
+            putStrLn "  ! Valor invalido. Digite um numero maior que zero (ex.: 1250.50)."
+            lerValor pergunta
+  where
+    trocarVirgula = map (\c -> if c == ',' then '.' else c)
+
+
+-- ---------- Cadastro ----------
+
+-- devolve uma lista NOVA com a transacao no fim
+cadastrar :: TipoTransacao -> [Transacao] -> IO [Transacao]
+cadastrar tp ts = do
+    putStrLn ("\n--- Cadastro de " ++ show tp ++ " ---")
+    d  <- lerTexto "Descricao........: "
+    v  <- lerValor "Valor (R$).......: "
+    c  <- lerTexto "Categoria........: "
+    dt <- lerTexto "Data (dd/mm/aaaa): "
+    let nova = Transacao
+            { descricao     = d
+            , valor         = v
+            , categoria     = c
+            , dataTransacao = dt
+            , tipo          = tp
+            }
+    putStrLn (">> " ++ show tp ++ " cadastrada com sucesso!")
+    return (ts ++ [nova])
+
+adicionarReceita :: [Transacao] -> IO [Transacao]
+adicionarReceita ts = cadastrar Receita ts
+
+adicionarDespesa :: [Transacao] -> IO [Transacao]
+adicionarDespesa ts = cadastrar Despesa ts
+
+
+-- ---------- Relatorios na tela ----------
 
 -- impressao recursiva
 listarTransacoes :: [Transacao] -> IO ()
@@ -150,8 +217,14 @@ transacoesExemplo =
 
 main :: IO ()
 main = do
+    hSetEncoding stdout utf8
+    hSetEncoding stdin  utf8
     putStrLn ""
     putStrLn "Controle Financeiro Pessoal"
+    putStrLn ""
+    -- teste do cadastro: pede uma receita e uma despesa novas
+    ts1 <- adicionarReceita transacoesExemplo
+    ts2 <- adicionarDespesa ts1
     putStrLn ""
     listarTransacoes transacoesExemplo
     putStrLn ""
