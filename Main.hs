@@ -6,7 +6,7 @@
 
 module Main where
 
-import Data.Char   (isSpace)
+import Data.Char   (isSpace, toLower)
 import System.IO   (hFlush, hSetEncoding, stdin, stdout, utf8)
 import Text.Printf (printf)
 
@@ -78,7 +78,6 @@ maiorGasto ts = maiorDaLista (despesas ts)
             Just m | valor m > valor t -> Just m
             _                          -> Just t
 
-
 mediaDespesas :: [Transacao] -> Double
 mediaDespesas ts
     | contar ds == 0 = 0
@@ -86,6 +85,12 @@ mediaDespesas ts
   where
     ds = despesas ts
 
+minusculas :: String -> String
+minusculas texto = map toLower texto
+
+buscarCategoria :: String -> [Transacao] -> [Transacao]
+buscarCategoria cat ts =
+    [ t | t <- ts, minusculas (categoria t) == minusculas cat ]
 
 -- ============================================================
 -- 3. FORMATACAO (funcoes que montam Strings)
@@ -197,6 +202,20 @@ mostrarMaiorGasto ts =
             putStrLn ("Categoria : " ++ categoria t)
             putStrLn ("Valor     : " ++ formatarValor (valor t))
 
+menuBuscarCategoria :: [Transacao] -> IO ()
+menuBuscarCategoria ts = do
+    cat <- lerTexto "Categoria que deseja buscar: "
+    let achadas = buscarCategoria cat ts
+    putStrLn ""
+    if null achadas
+        then putStrLn ("Nenhuma transacao encontrada na categoria \"" ++ cat ++ "\".")
+        else do
+            putStrLn ("Transacoes da categoria \"" ++ cat ++ "\":")
+            putStrLn linha
+            listarTransacoes achadas
+            putStrLn linha
+            putStrLn ("Total movimentado: " ++ formatarValor (somaValores achadas))
+
 
 -- ============================================================
 -- 5. MENU E LOOP PRINCIPAL
@@ -214,6 +233,7 @@ menu = putStr (unlines
     , " 6 - Mostrar total de despesas"
     , " 7 - Mostrar maior gasto"
     , " 8 - Mostrar media de gastos"
+    , " 9 - Buscar transacoes por categoria"
     , " 0 - Sair"
     , "============================================="
     ])
@@ -260,14 +280,17 @@ loop ts = do
             loop ts
 
         "8" -> do
-            putStrLn ("Media de gastos : " ++ formatarValor (mediaDespesas ts))
-            putStrLn ("Quantidade      : " ++ show (contar (despesas ts)))
+            putStrLn ("Media de gastos: " ++ formatarValor (mediaDespesas ts))
+            loop ts
+
+        "9" -> do
+            menuBuscarCategoria ts
             loop ts
 
         "0" -> putStrLn "Encerrando o sistema. Ate logo!"
 
         _   -> do
-            putStrLn "Opcao invalida! Digite um numero de 0 a 8."
+            putStrLn "Opcao invalida! Digite um numero de 0 a 9."
             loop ts
 
 
