@@ -7,6 +7,7 @@
 module Main where
 
 import Data.Char   (isSpace, toLower)
+import Data.List   (nub, sortBy)
 import System.IO   (hFlush, hSetEncoding, stdin, stdout, utf8)
 import Text.Printf (printf)
 
@@ -31,7 +32,56 @@ data Transacao = Transacao
 
 
 -- ============================================================
--- 2. FUNCOES
+-- 2. MONOID
+-- Resumo = mini-relatorio.
+-- ============================================================
+
+data Resumo = Resumo
+    { totalRec :: Double
+    , totalDes :: Double
+    , qtdRec   :: Int
+    , qtdDes   :: Int
+    } deriving (Show, Eq)
+
+-- Combinação resumos
+instance Semigroup Resumo where
+    r1 <> r2 = Resumo
+        { totalRec = totalRec r1 + totalRec r2
+        , totalDes = totalDes r1 + totalDes r2
+        , qtdRec   = qtdRec   r1 + qtdRec   r2
+        , qtdDes   = qtdDes   r1 + qtdDes   r2
+        }
+
+instance Monoid Resumo where
+    mempty = Resumo 0 0 0 0
+
+transacaoParaResumo :: Transacao -> Resumo
+transacaoParaResumo t =
+    case tipo t of
+        Receita -> Resumo (valor t) 0          1 0
+        Despesa -> Resumo 0         (valor t)  0 1
+
+-- map + foldr para concatenar
+gerarResumo :: [Transacao] -> Resumo
+gerarResumo ts = foldr (<>) mempty (map transacaoParaResumo ts)
+
+saldoDoResumo :: Resumo -> Double
+saldoDoResumo r = totalRec r - totalDes r
+
+
+-- ============================================================
+-- 3. INSTANCIA DE FUNCTOR
+-- ============================================================
+
+newtype Relatorio a = Relatorio { itens :: [a] }
+    deriving (Show)
+
+instance Functor Relatorio where
+    fmap f (Relatorio xs) = Relatorio (map f xs)
+
+
+-- ============================================================
+-- 4. FUNCOES PURAS
 -- ============================================================
 
 ehReceita :: Transacao -> Bool
@@ -92,8 +142,28 @@ buscarCategoria :: String -> [Transacao] -> [Transacao]
 buscarCategoria cat ts =
     [ t | t <- ts, minusculas (categoria t) == minusculas cat ]
 
+-- remove as categorias repetidas
+categoriasDeDespesa :: [Transacao] -> [String]
+categoriasDeDespesa ts = nub [ categoria t | t <- ts, ehDespesa t ]
+
+totalDaCategoria :: String -> [Transacao] -> Double
+totalDaCategoria cat ts =
+    somaValores [ t | t <- ts
+                    , ehDespesa t
+                    , minusculas (categoria t) == minusculas cat ]
+
+-- Functor: Relatorio String -> Relatorio (String, Double)
+gastosPorCategoria :: [Transacao] -> Relatorio (String, Double)
+gastosPorCategoria ts =
+    fmap (\cat -> (cat, totalDaCategoria cat ts))
+         (Relatorio (categoriasDeDespesa ts))
+
+ordenarPorValor :: [(String, Double)] -> [(String, Double)]
+ordenarPorValor pares = sortBy (\(_, a) (_, b) -> compare b a) pares
+
+
 -- ============================================================
--- 3. FORMATACAO (funcoes que montam Strings)
+-- 5. FORMATACAO (funcoes que montam Strings)
 -- ============================================================
 
 formatarValor :: Double -> String
@@ -114,7 +184,7 @@ textoTransacao t =
 
 
 -- ============================================================
--- 4. ENTRADA E SAIDA (IO)
+-- 6. ENTRADA E SAIDA (IO)
 -- ============================================================
 
 lerLinha :: String -> IO String
@@ -159,10 +229,10 @@ lerValor pergunta = do
 cadastrar :: TipoTransacao -> [Transacao] -> IO [Transacao]
 cadastrar tp ts = do
     putStrLn ("\n--- Cadastro de " ++ show tp ++ " ---")
-    d  <- lerTexto "Descricao........: "
-    v  <- lerValor "Valor (R$).......: "
-    c  <- lerTexto "Categoria........: "
-    dt <- lerTexto "Data (dd/mm/aaaa): "
+    d  <- lerTexto "Descricao         : "
+    v  <- lerValor "Valor (R$)        : "
+    c  <- lerTexto "Categoria         : "
+    dt <- lerTexto "Data (dd/mm/aaaa) : "
     let nova = Transacao
             { descricao     = d
             , valor         = v
@@ -202,6 +272,19 @@ mostrarMaiorGasto ts =
             putStrLn ("Categoria : " ++ categoria t)
             putStrLn ("Valor     : " ++ formatarValor (valor t))
 
+imprimirCategorias :: [(String, Double)] -> IO ()
+imprimirCategorias []               = return ()
+imprimirCategorias ((c, v) : resto) = do
+    putStrLn (c ++ ": " ++ formatarValor v)
+    imprimirCategorias resto
+
+mostrarGastosPorCategoria :: [Transacao] -> IO ()
+mostrarGastosPorCategoria ts =
+    let lista = ordenarPorValor (itens (gastosPorCategoria ts))
+    in if null lista
+          then putStrLn "Nenhuma despesa cadastrada."
+          else imprimirCategorias lista
+
 menuBuscarCategoria :: [Transacao] -> IO ()
 menuBuscarCategoria ts = do
     cat <- lerTexto "Categoria que deseja buscar: "
@@ -216,9 +299,33 @@ menuBuscarCategoria ts = do
             putStrLn linha
             putStrLn ("Total movimentado: " ++ formatarValor (somaValores achadas))
 
+-- Resumo (Monoid)
+relatorioCompleto :: [Transacao] -> IO ()
+relatorioCompleto ts = do
+    let r = gerarResumo ts
+    putStrLn "========== RELATORIO COMPLETO =========="
+    putStrLn ""
+    putStrLn ("Quantidade de receitas : " ++ show (qtdRec r))
+    putStrLn ("Quantidade de despesas : " ++ show (qtdDes r))
+    putStrLn ("Total de receitas      : " ++ formatarValor (totalRec r))
+    putStrLn ("Total de despesas      : " ++ formatarValor (totalDes r))
+    putStrLn ("Saldo atual            : " ++ formatarValor (saldoDoResumo r))
+    putStrLn ("Media de gastos        : " ++ formatarValor (mediaDespesas ts))
+    putStrLn ""
+    putStrLn "--- Maior gasto ---"
+    mostrarMaiorGasto ts
+    putStrLn ""
+    putStrLn "--- Gastos por categoria ---"
+    mostrarGastosPorCategoria ts
+    putStrLn ""
+    putStrLn "--- Todas as transacoes ---"
+    listarTransacoes ts
+    putStrLn ""
+    putStrLn "========================================"
+
 
 -- ============================================================
--- 5. MENU E LOOP PRINCIPAL
+-- 7. MENU E LOOP PRINCIPAL
 -- ============================================================
 
 menu :: IO ()
@@ -234,6 +341,7 @@ menu = putStr (unlines
     , " 7 - Mostrar maior gasto"
     , " 8 - Mostrar media de gastos"
     , " 9 - Buscar transacoes por categoria"
+    , "10 - Relatorio completo"
     , " 0 - Sair"
     , "============================================="
     ])
@@ -287,15 +395,19 @@ loop ts = do
             menuBuscarCategoria ts
             loop ts
 
+        "10" -> do
+            relatorioCompleto ts
+            loop ts
+
         "0" -> putStrLn "Encerrando o sistema. Ate logo!"
 
         _   -> do
-            putStrLn "Opcao invalida! Digite um numero de 0 a 9."
+            putStrLn "Opcao invalida! Digite um numero de 0 a 10."
             loop ts
 
 
 -- ============================================================
--- 6. DADOS DE EXEMPLO (troque por [] em main para comecar vazio)
+-- 8. DADOS DE EXEMPLO
 -- ============================================================
 
 transacoesExemplo :: [Transacao]
