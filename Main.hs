@@ -6,7 +6,7 @@
 
 module Main where
 
-import Data.Char   (isSpace, toLower)
+import Data.Char   (isDigit, isSpace, toLower)
 import Data.List   (nub, sortBy)
 import System.IO   (hFlush, hSetEncoding, stdin, stdout, utf8)
 import Text.Printf (printf)
@@ -154,6 +154,42 @@ gastosPorCategoria ts =
 ordenarPorValor :: [(String, Double)] -> [(String, Double)]
 ordenarPorValor pares = sortBy (\(_, a) (_, b) -> compare b a) pares
 
+-- recursao para separar dia, mes ano
+separarData :: String -> [String]
+separarData texto =
+    case break (== '/') texto of
+        (parte, [])        -> [parte]
+        (parte, _ : resto) -> parte : separarData resto
+
+numeroEntre :: Int -> Int -> Int -> String -> Bool
+numeroEntre tamanho minimo maximo texto =
+    contar texto == tamanho
+        && all isDigit texto
+        && numero >= minimo
+        && numero <= maximo
+  where
+    numero = read texto :: Int
+
+anoBissexto :: Int -> Bool
+anoBissexto ano = (ano `mod` 4 == 0 && ano `mod` 100 /= 0) || ano `mod` 400 == 0
+
+diasNoMes :: Int -> Int -> Int
+diasNoMes mes ano
+    | mes == 2 && anoBissexto ano = 29
+    | mes == 2                 = 28
+    | mes `elem` [4, 6, 9, 11] = 30
+    | otherwise                = 31
+
+-- pattern matching (dd/mm/aaaa)
+dataValida :: String -> Bool
+dataValida texto =
+    case separarData texto of
+        [d, m, a] -> numeroEntre 2 1 31 d
+                        && numeroEntre 2 1 12 m
+                        && numeroEntre 4 1900 2100 a
+                        && read d <= diasNoMes (read m) (read a)
+        _         -> False
+
 
 -- 5. FORMATACAO (funcoes que montam Strings)
 formatCurrency :: Double -> String
@@ -208,6 +244,15 @@ lerValor pergunta = do
   where
     trocarVirgula = map (\c -> if c == ',' then '.' else c)
 
+lerData :: String -> IO String
+lerData pergunta = do
+    entrada <- lerLinha pergunta
+    let texto = aparar entrada
+    if dataValida texto
+        then return texto
+        else do
+            putStrLn "  ! Data invalida. Use o formato dd/mm/aaaa (ex.: 05/06/2026)."
+            lerData pergunta
 
 -- ---------- Cadastro ----------
 
@@ -218,7 +263,7 @@ cadastrar tp ts = do
     d  <- lerTexto "Descricao         : "
     v  <- lerValor "Valor (R$)        : "
     c  <- lerTexto "Categoria         : "
-    dt <- lerTexto "Data (dd/mm/aaaa) : "
+    dt <- lerData "Data (dd/mm/aaaa) : "
     let nova = Transacao
             { descricao     = d
             , valorT = v
@@ -244,9 +289,7 @@ exibirTransacoes []          = putStrLn "Nenhuma transacao cadastrada ainda."
 exibirTransacoes [t]         = putStr (textoTransacao t)
 exibirTransacoes (t : resto) = do
     putStr (textoTransacao t)
-    putStrLn ""
     putStrLn linha
-    putStrLn ""
     exibirTransacoes resto
 
 exibirMaiorGasto :: [Transacao] -> IO ()
@@ -254,9 +297,9 @@ exibirMaiorGasto ts =
     case maiorGasto ts of
         Nothing -> putStrLn "Nenhuma despesa cadastrada."
         Just t  -> do
-            putStrLn ("Descricao : " ++ descricao t)
-            putStrLn ("Categoria : " ++ categoria t)
-            putStrLn ("Valor     : " ++ formatCurrency (valor t))
+            putStrLn ("Descricao: " ++ descricao t)
+            putStrLn ("Categoria: " ++ categoria t)
+            putStrLn ("Valor....: " ++ formatCurrency (valor t))
 
 imprimirCategorias :: [(String, Double)] -> IO ()
 imprimirCategorias []               = return ()
@@ -372,6 +415,7 @@ loop ts = do
 
         "8" -> do
             putStrLn ("Media de gastos: " ++ formatCurrency (mediaDespesas ts))
+            putStrLn ("Quantidade        : " ++ show (contar (despesas ts)))
             loop ts
 
         "9" -> do
