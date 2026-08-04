@@ -154,6 +154,7 @@ gastosPorCategoria ts =
 ordenarPorValor :: [(String, Double)] -> [(String, Double)]
 ordenarPorValor pares = sortBy (\(_, a) (_, b) -> compare b a) pares
 
+-- recursao para separar dia, mes ano
 separarData :: String -> [String]
 separarData texto =
     case break (== '/') texto of
@@ -179,6 +180,7 @@ diasNoMes mes ano
     | mes `elem` [4, 6, 9, 11] = 30
     | otherwise                = 31
 
+-- pattern matching (dd/mm/aaaa)
 dataValida :: String -> Bool
 dataValida texto =
     case separarData texto of
@@ -250,7 +252,7 @@ lerData pergunta = do
         then return texto
         else do
             putStrLn "  ! Data invalida. Use o formato dd/mm/aaaa (ex.: 05/06/2026)."
-            return texto
+            lerData pergunta
 
 -- ---------- Cadastro ----------
 
