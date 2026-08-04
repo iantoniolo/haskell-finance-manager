@@ -1,6 +1,6 @@
 # Haskell Finance Manager
 
-Projeto da disciplina de **Programação Funcional** — desenvolvido em **Haskell**, executado pelo terminal.
+Projeto da disciplina de **Programação Funcional**, desenvolvido em **Haskell**, executado pelo terminal.
 
 ---
 
