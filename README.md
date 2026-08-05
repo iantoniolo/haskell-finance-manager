@@ -78,15 +78,26 @@ runghc Main.hs
 
 ## Validações de entrada
 
-| Campo                 | Regra                                                                                                                                                            |
-| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Descrição e categoria | não podem ficar vazios                                                                                                                                           |
-| Valor                 | precisa ser número maior que zero; aceita vírgula ou ponto (`1250,50`)                                                                                           |
-| Data                  | precisa estar no formato `dd/mm/aaaa`, com mês 1–12, ano 1900–2100 e dia **existente naquele mês** (`30/02` e `31/04` são recusados; `29/02` só em ano bissexto) |
-| Opção do menu         | fora de 0–10 exibe "opção inválida" e volta ao menu                                                                                                              |
+| Campo                 | Regra                                                                                                                                                            | Função pura     |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
+| Descrição e categoria | não podem ficar vazios                                                                                                                                           | `naoVazio`      |
+| Valor                 | precisa ser número maior que zero; aceita vírgula ou ponto (`1250,50`)                                                                                           | `valorPositivo` |
+| Data                  | precisa estar no formato `dd/mm/aaaa`, com mês 1–12, ano 1900–2100 e dia **existente naquele mês** (`30/02` e `31/04` são recusados; `29/02` só em ano bissexto) | `dataBR`        |
+| Opção do menu         | fora de 0–10 exibe "opção inválida" e volta ao menu                                                                                                              | —               |
 
-Em todos os casos o sistema **pergunta de novo** até a entrada ser válida, usando
-recursão em vez de laço.
+As regras são **funções puras** que devolvem `Maybe`: `Nothing` significa entrada
+inválida. Como não fazem `IO`, dá para testá-las direto no GHCi:
+
+```haskell
+ghci> valorPositivo "1250,50"    -- Just 1250.5
+ghci> valorPositivo "abc"        -- Nothing
+ghci> dataBR "29/02/2024"        -- Just "29/02/2024"   (ano bissexto)
+ghci> dataBR "29/02/2025"        -- Nothing
+```
+
+Quem fala com o usuário é uma **única** função, `lerCampo`, que recebe o validador
+como parâmetro (função de alta ordem) e **pergunta de novo por recursão** até o
+`Maybe` vir `Just`. Antes havia três funções de leitura quase idênticas.
 
 ---
 
@@ -95,38 +106,76 @@ recursão em vez de laço.
 | Relatório                       | Como é calculado                                                     |
 | ------------------------------- | -------------------------------------------------------------------- |
 | Saldo atual                     | `totalReceitas - totalDespesas`                                      |
-| Total de receitas               | `map` + `foldr` sobre as receitas                                    |
+| Total de receitas               | `foldr` + composição (`.`) sobre as receitas                         |
 | Total de despesas               | soma **recursiva** das despesas                                      |
 | Maior gasto                     | busca **recursiva** com guards (mostra descrição, categoria e valor) |
-| Média de gastos                 | soma das despesas ÷ quantidade (com guard contra divisão por zero)   |
-| Quantidade de receitas/despesas | contagem recursiva + campos do `Resumo` (Monoid)                     |
+| Média de gastos                 | vem do `Resumo`: `totalDes / qtdDes` — **uma única passada**          |
+| Quantidade de receitas/despesas | campos do `Resumo` (Monoid) + contagem recursiva                     |
 | Gastos por categoria            | list comprehension + `nub` + `fmap` (Functor)                        |
-| Listagem completa               | impressão recursiva da lista                                         |
+| Listagem completa               | `map` + `intercalate` para separar os registros                      |
+
+### O papel do `Monoid` no cálculo da média
+
+O `Resumo` guarda **soma e quantidade juntas**. Como ele é um `Monoid`, o relatório
+inteiro sai de um único `foldMap`:
+
+```haskell
+gerarResumo = foldMap transacaoParaResumo   -- == foldr (<>) mempty . map
+```
+
+Isso importa na média. O caminho ingênuo percorre a lista **duas vezes** (uma para
+somar, outra para contar):
+
+```haskell
+mediaDespesas ts = somaValores ds / fromIntegral (contar ds)   -- 2 travessias
+```
+
+Com o `Monoid`, uma passada só já traz os dois números:
+
+```haskell
+mediaDoResumo r = totalDes r / fromIntegral (qtdDes r)         -- 1 travessia
+```
+
+As leis do `Monoid` podem ser conferidas no GHCi:
+
+```haskell
+ghci> let (a, b) = splitAt 3 transacoesExemplo
+ghci> gerarResumo (a ++ b) == gerarResumo a <> gerarResumo b   -- True (associatividade)
+ghci> gerarResumo [] == mempty                                 -- True (elemento neutro)
+```
+
+A primeira igualdade é o que permitiria dividir a lista em pedaços, resumir cada
+pedaço separadamente e combinar os resultados no fim.
 
 ---
 
 ## Conceitos de Haskell utilizados
 
-| Conceito                        | Onde aparece em `Main.hs`                                                                                                                                |
-| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Tipo personalizado (`data`)** | `TipoTransacao`, `Transacao`, `Resumo`                                                                                                                   |
-| **Record syntax**               | campos de `Transacao` (viram funções de acesso)                                                                                                          |
-| **`deriving (Show, Eq)`**       | nos três tipos acima                                                                                                                                     |
-| **Instância de `Monoid`**       | `instance Semigroup Resumo` / `instance Monoid Resumo`                                                                                                   |
-| **Instância de `Functor`**      | `instance Functor Relatorio`                                                                                                                             |
-| **Recursão**                    | `somaValores`, `contar`, `maiorGasto`, `separarPorBarra`, `listarTransacoes`, `imprimirCategorias`, `lerTexto`, `lerValor`, `lerData` e o próprio `loop` |
-| **List comprehension**          | `despesas`, `buscarCategoria`, `categoriasDeDespesa`, `totalDaCategoria`                                                                                 |
-| **`map`**                       | `totalReceitas`, `gerarResumo`, `minusculas`                                                                                                             |
-| **`filter`**                    | `receitas`                                                                                                                                               |
-| **`foldr`**                     | `totalReceitas`, `gerarResumo`                                                                                                                           |
-| **Funções de ordem superior**   | `filter ehReceita`, `foldr (<>)`, `fmap (\cat -> ...)`, `sortBy (\...)`, `all isDigit`                                                                   |
-| **Pattern matching**            | `somaValores []` / `(t:resto)`, `case tipo t of Receita -> ...`, `case ... of Nothing / Just`, `[d, m, a]` em `dataValida`                               |
-| **Guards**                      | `mediaDespesas`, `maiorGasto`, `diasDoMes`, validação em `lerValor`                                                                                      |
-| **Avaliação preguiçosa**        | `numeroEntre` — o `read` só roda depois do `all isDigit`                                                                                                 |
-| **`Maybe`**                     | retorno de `maiorGasto` (pode não existir despesa)                                                                                                       |
-| **Funções puras**               | toda a seção 4 e 5 — nenhuma delas faz `IO`                                                                                                              |
-| **`IO`**                        | seções 6 e 7 (`main`, `loop`, cadastros e impressões)                                                                                                    |
-| **Imutabilidade**               | `cadastrar` devolve uma lista **nova**; nada é alterado no lugar                                                                                         |
+| Conceito                        | Onde aparece em `Main.hs`                                                                                                    |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| **Apelido de tipo (`type`)**    | `Categoria`, `DataBR`, `Valor`                                                                                               |
+| **Tipo soma (`data`)**          | `TipoTransacao` (`Receita` \| `Despesa`)                                                                                     |
+| **Tipo produto (`data`)**       | `Transacao`, `Resumo`                                                                                                        |
+| **`newtype`**                   | `Relatorio a`                                                                                                                |
+| **Record syntax**               | campos de `Transacao` e `Resumo` (viram funções de acesso)                                                                   |
+| **`deriving (Show, Eq)`**       | `TipoTransacao`, `Transacao`, `Resumo`                                                                                       |
+| **Instância de `Monoid`**       | `instance Semigroup Resumo` / `instance Monoid Resumo`                                                                       |
+| **Instância de `Functor`**      | `instance Functor Relatorio`                                                                                                 |
+| **`foldMap`**                   | `gerarResumo` — evita percorrer a lista duas vezes                                                                           |
+| **Recursão**                    | `somaValores`, `contar`, `maiorGasto`, `separarPorBarra`, `lerCampo` e o próprio `loop`                                      |
+| **List comprehension**          | `despesas`, `buscarCategoria`, `categoriasDeDespesa`, `totalDaCategoria`, `mostrarGastosPorCategoria`                        |
+| **`map`**                       | `minusculas`, `listarTransacoes`, `fmap` de `Relatorio`                                                                      |
+| **`filter`**                    | `receitas`                                                                                                                   |
+| **`foldr`**                     | `totalReceitas` (e dentro do `foldMap`)                                                                                      |
+| **Composição (`.`)**            | `totalDespesas`, `mediaDespesas`, `totalReceitas`, `aparar`                                                                  |
+| **Funções de ordem superior**   | `lerCampo` (recebe o validador), `filter ehReceita`, `fmap (\cat -> ...)`, `sortBy (\...)`, `all isDigit`                    |
+| **Pattern matching**            | `somaValores []` / `(t:resto)`, `case tipo t of Receita -> ...`, `Nothing` / `Just`, `[d, m, a]` em `dataValida`             |
+| **Guards**                      | `mediaDoResumo`, `maiorGasto`, `diasDoMes`, `dataBR`, `mostrarGastosPorCategoria`                                            |
+| **Avaliação preguiçosa**        | `numeroEntre` — o `read` só roda depois do `all isDigit`                                                                     |
+| **`Maybe`**                     | `maiorGasto` (pode não existir despesa) e os três validadores                                                                |
+| **Funções puras**               | seções 4, 5 e 6 — nenhuma delas faz `IO`                                                                                     |
+| **`IO`**                        | seções 7 e 8 (`main`, `loop`, `lerCampo`, cadastro e impressões)                                                             |
+| **Imutabilidade**               | `cadastrar` devolve uma lista **nova**; nada é alterado no lugar                                                             |
 
 ---
 
@@ -165,6 +214,20 @@ terminal já é UTF-8.
 
 > Se não quiser depender disso, é só não usar acentos ao cadastrar: o sistema
 > funciona igual, já que todos os textos do programa são ASCII.
+
+---
+
+## Decisões de projeto
+
+- **`ts ++ [nova]` no cadastro** ([`cadastrar`](Main.hs)) é O(n), porque em estruturas
+  persistentes a concatenação copia o caminho até o ponto alterado. Usar `nova : ts`
+  seria O(1), mas inverteria a ordem cronológica da listagem. Como a lista é pequena,
+  a legibilidade venceu — é uma escolha consciente, não descuido.
+- **Uma só função de leitura.** `lerCampo` recebe o validador como parâmetro, então
+  não existem `lerTexto`/`lerValor`/`lerData` separadas repetindo a mesma estrutura.
+- **`Either` não foi usado.** Ele daria mensagens de erro tipadas (em vez de `Maybe` +
+  texto solto), mas aumentaria o código sem mudar o comportamento. O projeto priorizou
+  ficar enxuto.
 
 ---
 
