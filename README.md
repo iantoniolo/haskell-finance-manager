@@ -97,7 +97,7 @@ ghci> dataBR "29/02/2025"        -- Nothing
 
 Quem fala com o usuário é uma **única** função, `lerCampo`, que recebe o validador
 como parâmetro (função de alta ordem) e **pergunta de novo por recursão** até o
-`Maybe` vir `Just`. Antes havia três funções de leitura quase idênticas.
+`Maybe` vir `Just`.
 
 ---
 
