@@ -109,7 +109,7 @@ como parâmetro (função de alta ordem) e **pergunta de novo por recursão** at
 | Total de receitas               | `foldr` + composição (`.`) sobre as receitas                         |
 | Total de despesas               | soma **recursiva** das despesas                                      |
 | Maior gasto                     | busca **recursiva** com guards (mostra descrição, categoria e valor) |
-| Média de gastos                 | vem do `Resumo`: `totalDespesasResumo / quantidadeDespesasResumo` — **uma única passada**          |
+| Média de gastos                 | vem do `Resumo`: `totalDespesasResumo / quantidadeDespesasResumo` — **uma única passada** |
 | Quantidade de receitas/despesas | campos do `Resumo` (Monoid) + contagem recursiva                     |
 | Gastos por categoria            | list comprehension + `nub` + `fmap` (Functor)                        |
 | Listagem completa               | `map` + `intercalate` para separar os registros                      |
@@ -133,7 +133,7 @@ mediaDespesas ts = somaValores ds / fromIntegral (contar ds)   -- 2 travessias
 Com o `Monoid`, uma passada só já traz os dois números:
 
 ```haskell
-mediaResumo r = totalDespesasResumo r / fromIntegral (quantidadeDespesasResumo r)         -- 1 travessia
+mediaResumo r = totalDespesasResumo r / fromIntegral (quantidadeDespesasResumo r) -- 1 travessia
 ```
 
 As leis do `Monoid` podem ser conferidas no GHCi:
@@ -162,15 +162,15 @@ pedaço separadamente e combinar os resultados no fim.
 | **Instância de `Monoid`**       | `instance Semigroup Resumo` / `instance Monoid Resumo`                                                                       |
 | **Instância de `Functor`**      | `instance Functor Relatorio`                                                                                                 |
 | **`foldMap`**                   | `gerarResumo` — evita percorrer a lista duas vezes                                                                           |
-| **Recursão**                    | `somaValores`, `contar`, `maiorGasto`, `separarData`, `lerCampo` e o próprio `loop`                                      |
-| **List comprehension**          | `despesas`, `buscarCategoria`, `categoriasDespesas`, `totalCategoria`, `exibirGastosCategoria`                        |
+| **Recursão**                    | `somaValores`, `contar`, `maiorGasto`, `separarData`, `lerCampo` e o próprio `loop`                                          |
+| **List comprehension**          | `despesas`, `buscarCategoria`, `categoriasDespesas`, `totalCategoria`, `exibirGastosCategoria`                              |
 | **`map`**                       | `minusculas`, `exibirTransacoes`, `fmap` de `Relatorio`                                                                      |
 | **`filter`**                    | `receitas`                                                                                                                   |
 | **`foldr`**                     | `totalReceitas` (e dentro do `foldMap`)                                                                                      |
 | **Composição (`.`)**            | `totalDespesas`, `mediaDespesas`, `totalReceitas`, `aparar`                                                                  |
 | **Funções de ordem superior**   | `lerCampo` (recebe o validador), `filter ehReceita`, `fmap (\cat -> ...)`, `sortBy (\...)`, `all isDigit`                    |
 | **Pattern matching**            | `somaValores []` / `(t:resto)`, `case tipo t of Receita -> ...`, `Nothing` / `Just`, `[d, m, a]` em `dataValida`             |
-| **Guards**                      | `mediaResumo`, `maiorGasto`, `diasNoMes`, `dataBR`, `exibirGastosCategoria`                                            |
+| **Guards**                      | `mediaResumo`, `maiorGasto`, `diasNoMes`, `dataBR`, `exibirGastosCategoria`                                                  |
 | **Avaliação preguiçosa**        | `numeroEntre` — o `read` só roda depois do `all isDigit`                                                                     |
 | **`Maybe`**                     | `maiorGasto` (pode não existir despesa) e os três validadores                                                                |
 | **Funções puras**               | seções 4, 5 e 6 — nenhuma delas faz `IO`                                                                                     |
@@ -192,6 +192,29 @@ hSetEncoding stdin  utf8
 Com isso, **digitar acentos nos campos funciona normalmente** (testado com
 `Café da manhã` e categoria `Alimentação`, inclusive na busca em maiúsculas).
 
+### ⚠️ No Windows (PowerShell / Prompt de Comando)
+
+O console do Windows usa por padrão uma _code page_ legada (CP850 ou CP1252 em
+português), enquanto o programa fala UTF-8. Esse descompasso causa dois sintomas:
+
+- na **saída**, acentos aparecem embaralhados (`Ã§`, `Ã£`);
+- na **entrada**, digitar acento pode derrubar o programa com
+  `hGetLine: invalid argument (invalid byte sequence)`.
+
+**Solução:** troque o console para UTF-8 antes de executar.
+
+```powershell
+chcp 65001
+.\controle.exe
+```
+
+No **Windows Terminal** ou no **PowerShell 7** isso geralmente já vem configurado
+e o programa roda direto. No macOS e no Linux não é preciso fazer nada — o
+terminal já é UTF-8.
+
+> Se não quiser depender disso, é só não usar acentos ao cadastrar: o sistema
+> funciona igual, já que todos os textos do programa são ASCII.
+
 ---
 
 ## Decisões de projeto
@@ -211,7 +234,7 @@ Com isso, **digitar acentos nos campos funciona normalmente** (testado com
 ## Melhorias futuras
 
 - Salvar e carregar as transações em arquivo (`readFile` / `writeFile`).
-- Separar o código em módulo (`Tipos.hs`, `Operacoes.hs`, `Main.hs`).
+- Separar o código em módulos (`Tipos.hs`, `Operacoes.hs`, `Main.hs`).
 - Filtrar relatórios por mês/período usando um tipo `Data` próprio.
 - Editar e remover transações.
 - Testes automatizados com HUnit ou QuickCheck.
