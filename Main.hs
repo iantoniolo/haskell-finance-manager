@@ -7,78 +7,87 @@
 module Main where
 
 import Data.Char   (isDigit, isSpace, toLower)
-import Data.List   (nub, sortBy)
+import Data.List   (intercalate, nub, sortBy)
 import System.IO   (hFlush, hSetEncoding, stdin, stdout, utf8)
 import Text.Printf (printf)
 
 
--- 1. TIPOS PERSONALIZADOS
+-- 1. TIPOS
+
+type Categoria = String
+type DataBR    = String
+type Valor     = Double
+
 data TipoTransacao
     = Receita
     | Despesa
     deriving (Show, Eq)
 
--- Record syntax: cada campo vira uma funcao de acesso (ex.: valor :: Transacao -> Double)
 data Transacao = Transacao
-    { descricao     :: String
-    , valorT :: Double
-    , categoria     :: String
-    , dataDaTransacaoBR :: String
+    { descricao :: String
+    , valorT :: Valor
+    , categoria :: Categoria
+    , dataDaTransacaoBR :: DataBR
     , tipoTransacao :: TipoTransacao
     } deriving (Show, Eq)
 
-
-
-
-valor :: Transacao -> Double
+valor :: Transacao -> Valor
 valor = valorT
 
 tipo :: Transacao -> TipoTransacao
 tipo = tipoTransacao
+
 -- 2. MONOID
--- Resumo = mini-relatorio.
+
 data Resumo = Resumo
-    { totalReceitasResumo :: Double
-    , totalDespesasResumo :: Double
-    , quantidadeReceitasResumo   :: Int
-    , quantidadeDespesasResumo   :: Int
+    { totalReceitasResumo :: Valor
+    , totalDespesasResumo :: Valor
+    , quantidadeReceitasResumo :: Int
+    , quantidadeDespesasResumo :: Int
     } deriving (Show, Eq)
 
--- Combinação resumos
+-- comabina 2 resumos somando os campos
 instance Semigroup Resumo where
-    r1 <> r2 = Resumo
-        { totalReceitasResumo = totalReceitasResumo r1 + totalReceitasResumo r2
-        , totalDespesasResumo = totalDespesasResumo r1 + totalDespesasResumo r2
-        , quantidadeReceitasResumo   = quantidadeReceitasResumo   r1 + quantidadeReceitasResumo   r2
-        , quantidadeDespesasResumo   = quantidadeDespesasResumo   r1 + quantidadeDespesasResumo   r2
+    resumoLeft <> resumoRight = Resumo
+        { totalReceitasResumo = totalReceitasResumo resumoLeft + totalReceitasResumo resumoRight
+        , totalDespesasResumo = totalDespesasResumo resumoLeft + totalDespesasResumo resumoRight
+        , quantidadeReceitasResumo = quantidadeReceitasResumo resumoLeft + quantidadeReceitasResumo resumoRight
+        , quantidadeDespesasResumo = quantidadeDespesasResumo resumoLeft + quantidadeDespesasResumo resumoRight
         }
 
 instance Monoid Resumo where
     mempty = Resumo 0 0 0 0
 
 transacaoParaResumo :: Transacao -> Resumo
-transacaoParaResumo t  =
-    case tipo t of
-        Receita -> Resumo (valor t) 0          1 0
-        Despesa -> Resumo 0         (valor t)  0 1
+transacaoParaResumo transacaoAtual  =
+    case tipo transacaoAtual of
+        Receita -> Resumo (valor transacaoAtual) 0 1 0
+        Despesa -> Resumo 0 (valor transacaoAtual) 0 1
 
--- map + foldr para concatenar
 gerarResumo :: [Transacao] -> Resumo
-gerarResumo ts = foldr (<>) mempty (map transacaoParaResumo ts)
+gerarResumo = foldMap transacaoParaResumo
 
-saldoSummary :: Resumo -> Double
-saldoSummary r  = totalReceitasResumo r - totalDespesasResumo r
+saldoSummary :: Resumo -> Valor
+saldoSummary resumoAtual  =
+    totalReceitasResumo resumoAtual - totalDespesasResumo resumoAtual
+
+-- nao precissa percorrer a lista duas vezes pra calcular a media
+mediaResumo :: Resumo -> Valor
+mediaResumo resumoAtual
+    | quantidadeDespesasResumo resumoAtual == 0 = 0
+    | otherwise = totalDespesasResumo resumoAtual / fromIntegral (quantidadeDespesasResumo resumoAtual)
 
 
--- 3. INSTANCIA DE FUNCTOR
+-- 3. FUNCTOR
 newtype Relatorio a = Relatorio { itemsRelatorio :: [a] }
     deriving (Show)
 
 instance Functor Relatorio where
-    fmap f (Relatorio xs) = Relatorio (map f xs)
-
+    fmap transformarItem (Relatorio itemsList) =
+        Relatorio (map transformarItem itemsList)
 
 -- 4. FUNCOES PURAS
+
 ehReceita :: Transacao -> Bool
 ehReceita t = tipo t == Receita
 
@@ -86,75 +95,67 @@ ehDespesa :: Transacao -> Bool
 ehDespesa t = tipo t == Despesa
 
 receitas :: [Transacao] -> [Transacao]
-receitas ts = filter ehReceita ts
+receitas = filter ehReceita
 
 despesas :: [Transacao] -> [Transacao]
 despesas ts = [ t | t <- ts, ehDespesa t ]
 
--- recursao: soma da lista vazia e 0; senao, primeiro + soma do resto
-somaValores :: [Transacao] -> Double
-somaValores []           = 0
-somaValores (t : resto)  = valor t + somaValores resto
+somaValores :: [Transacao] -> Valor
+somaValores []          = 0
+somaValores (t : resto) = valor t + somaValores resto
 
--- recursao
 contar :: [a] -> Int
-contar []           = 0
-contar (_ : resto)  = 1 + contar resto
+contar [] = 0
+contar (_ : restanteDaLista) = 1 + contar restanteDaLista
 
-totalReceitas :: [Transacao] -> Double
-totalReceitas ts = foldr (+) 0 (map valor (receitas ts))
+totalReceitas :: [Transacao] -> Valor
+totalReceitas = foldr (\t acc -> valor t + acc) 0 . receitas
 
-totalDespesas :: [Transacao] -> Double
-totalDespesas ts = somaValores (despesas ts)
+totalDespesas :: [Transacao] -> Valor
+totalDespesas = somaValores . despesas
 
-calcularSaldo :: [Transacao] -> Double
+calcularSaldo :: [Transacao] -> Valor
 calcularSaldo ts = totalReceitas ts - totalDespesas ts
 
--- Maybe
+mediaDespesas :: [Transacao] -> Valor
+mediaDespesas = mediaResumo . gerarResumo
+
 maiorGasto :: [Transacao] -> Maybe Transacao
 maiorGasto ts = maiorDaLista (despesas ts)
   where
-    maiorDaLista []            = Nothing
-    maiorDaLista [t]           = Just t
-    maiorDaLista (t : resto)   =
+    maiorDaLista []          = Nothing
+    maiorDaLista (t : resto) =
         case maiorDaLista resto of
             Just m | valor m > valor t -> Just m
             _                          -> Just t
 
-mediaDespesas :: [Transacao] -> Double
-mediaDespesas ts
-    | contar ds == 0 = 0
-    | otherwise      = somaValores ds / fromIntegral (contar ds)
-  where
-    ds = despesas ts
-
 minusculas :: String -> String
-minusculas texto = map toLower texto
+minusculas = map toLower
 
-buscarCategoria :: String -> [Transacao] -> [Transacao]
-buscarCategoria cat ts =
-    [ t | t <- ts, minusculas (categoria t) == minusculas cat ]
+mesmaCategoria :: Categoria -> Transacao -> Bool
+mesmaCategoria cat t =
+    minusculas (categoria t) == minusculas cat
 
--- remove as categorias repetidas
-categoriasDespesas :: [Transacao] -> [String]
+buscarCategoria :: Categoria -> [Transacao] -> [Transacao]
+buscarCategoria cat ts = [ t | t <- ts, mesmaCategoria cat t ]
+
+categoriasDespesas :: [Transacao] -> [Categoria]
 categoriasDespesas ts = nub [ categoria t | t <- ts, ehDespesa t ]
 
-totalCategoria :: String -> [Transacao] -> Double
+totalCategoria :: Categoria -> [Transacao] -> Valor
 totalCategoria cat ts =
-    somaValores [ t | t <- ts
-                    , ehDespesa t
-                    , minusculas (categoria t) == minusculas cat ]
+    somaValores [ t | t <- ts, ehDespesa t, mesmaCategoria cat t ]
 
--- Functor: Relatorio String -> Relatorio (String, Double)
-gastosPorCategoria :: [Transacao] -> Relatorio (String, Double)
+gastosPorCategoria :: [Transacao] -> Relatorio (Categoria, Valor)
 gastosPorCategoria ts =
     fmap (\cat -> (cat, totalCategoria cat ts))
          (Relatorio (categoriasDespesas ts))
 
-ordenarPorValor :: [(String, Double)] -> [(String, Double)]
-ordenarPorValor pares = sortBy (\(_, a) (_, b) -> compare b a) pares
+ordenarPorValor :: [(Categoria, Valor)] -> [(Categoria, Valor)]
+ordenarPorValor =
+    sortBy (\(_, valorA) (_, valorB) -> compare valorB valorA)
 
--- recursao para separar dia, mes ano
+-- 5. VALIDACOES PURAS
 separarData :: String -> [String]
 separarData texto =
     case break (== '/') texto of
@@ -171,17 +172,17 @@ numeroEntre tamanho minimo maximo texto =
     numero = read texto :: Int
 
 anoBissexto :: Int -> Bool
-anoBissexto ano = (ano `mod` 4 == 0 && ano `mod` 100 /= 0) || ano `mod` 400 == 0
+anoBissexto ano =
+    (ano `mod` 4 == 0 && ano `mod` 100 /= 0) || ano `mod` 400 == 0
 
 diasNoMes :: Int -> Int -> Int
 diasNoMes mes ano
     | mes == 2 && anoBissexto ano = 29
-    | mes == 2                 = 28
+    | mes == 2 = 28
     | mes `elem` [4, 6, 9, 11] = 30
-    | otherwise                = 31
+    | otherwise = 31
 
--- pattern matching (dd/mm/aaaa)
-dataValida :: String -> Bool
+dataValida :: DataBR -> Bool
 dataValida texto =
     case separarData texto of
         [d, m, a] -> numeroEntre 2 1 31 d
@@ -190,26 +191,44 @@ dataValida texto =
                         && read d <= diasNoMes (read m) (read a)
         _         -> False
 
+naoVazio :: String -> Maybe String
+naoVazio ""    = Nothing
+naoVazio texto = Just texto
 
--- 5. FORMATACAO (funcoes que montam Strings)
-formatCurrency :: Double -> String
-formatCurrency v  = printf "R$ %.2f" v
+valorPositivo :: String -> Maybe Valor
+valorPositivo texto =
+    case reads (map trocaVirgula texto) :: [(Valor, String)] of
+        [(v, "")] | v > 0 -> Just v
+        _                 -> Nothing
+  where
+    trocaVirgula c = if c == ',' then '.' else c
+
+dataBR :: String -> Maybe DataBR
+dataBR texto
+    | dataValida texto = Just texto
+    | otherwise        = Nothing
+
+
+-- 6. FORMATACAO (funcoes que so montam Strings)
+
+formatCurrency :: Valor -> String
+formatCurrency valorAtual  = printf "R$ %.2f" valorAtual
 
 linha :: String
 linha = replicate 45 '-'
 
 textoTransacao :: Transacao -> String
-textoTransacao t  =
+textoTransacao transacaoAtual  =
     unlines
-        [ show (tipo t)
-        , "Descricao : " ++ descricao t
-        , "Valor     : " ++ formatCurrency (valor t)
-        , "Categoria : " ++ categoria t
-        , "Data      : " ++ dataDaTransacaoBR t
+        [ show (tipoTransacao transacaoAtual)
+        , "Descricao : " ++ descricao transacaoAtual
+        , "Valor     : " ++ formatCurrency (valorT transacaoAtual)
+        , "Categoria : " ++ categoria transacaoAtual
+        , "Data      : " ++ dataDaTransacaoBR transacaoAtual
         ]
 
+-- 7. ENTRADA E SAIDA (IO)
 
--- 6. ENTRADA E SAIDA (IO)
 lerLinha :: String -> IO String
 lerLinha pergunta = do
     putStr pergunta
@@ -217,80 +236,43 @@ lerLinha pergunta = do
     getLine
 
 aparar :: String -> String
-aparar texto = tirar (tirar texto)
+aparar = tirar . tirar
   where
     tirar = reverse . dropWhile isSpace
 
--- verificação null
-lerTexto :: String -> IO String
-lerTexto pergunta = do
+lerCampo :: String -> (String -> Maybe a) -> String -> IO a
+lerCampo pergunta valida erro = do
     entrada <- lerLinha pergunta
-    let texto = aparar entrada
-    if null texto
-        then do
-            putStrLn "  ! Campo obrigatorio, tente novamente."
-            lerTexto pergunta
-        else return texto
+    case valida (aparar entrada) of
+        Just x  -> return x
+        Nothing -> do
+            putStrLn ("  ! " ++ erro)
+            lerCampo pergunta valida erro
 
--- read
-lerValor :: String -> IO Double
-lerValor pergunta = do
-    entrada <- lerLinha pergunta
-    case reads (trocarVirgula (aparar entrada)) :: [(Double, String)] of
-        [(v, "")] | v > 0 -> return v
-        _ -> do
-            putStrLn "  ! Valor invalido. Digite um numero maior que zero (ex.: 1250.50)."
-            lerValor pergunta
-  where
-    trocarVirgula = map (\c -> if c == ',' then '.' else c)
 
-lerData :: String -> IO String
-lerData pergunta = do
-    entrada <- lerLinha pergunta
-    let texto = aparar entrada
-    if dataValida texto
-        then return texto
-        else do
-            putStrLn "  ! Data invalida. Use o formato dd/mm/aaaa (ex.: 05/06/2026)."
-            lerData pergunta
-
--- ---------- Cadastro ----------
-
--- devolve uma lista NOVA com a transacao no fim
 cadastrar :: TipoTransacao -> [Transacao] -> IO [Transacao]
 cadastrar tp ts = do
     putStrLn ("\n--- Cadastro de " ++ show tp ++ " ---")
-    d  <- lerTexto "Descricao         : "
-    v  <- lerValor "Valor (R$)        : "
-    c  <- lerTexto "Categoria         : "
-    dt <- lerData "Data (dd/mm/aaaa) : "
-    let nova = Transacao
-            { descricao     = d
-            , valorT = v
-            , categoria     = c
-            , dataDaTransacaoBR = dt
-            , tipoTransacao = tp
-            }
+    d  <- lerCampo "Descricao         : " naoVazio      "Campo obrigatorio."
+    v  <- lerCampo "Valor (R$)        : " valorPositivo "Valor invalido. Digite um numero maior que zero (ex.: 1250.50)."
+    c  <- lerCampo "Categoria         : " naoVazio      "Campo obrigatorio."
+    dt <- lerCampo "Data (dd/mm/aaaa) : " dataBR        "Data invalida. Use o formato dd/mm/aaaa (ex.: 05/06/2026)."
     putStrLn (">> " ++ show tp ++ " cadastrada com sucesso!")
-    return (ts ++ [nova])
+    return
+        (ts ++
+            [ Transacao
+                { descricao = d
+                , valorT = v
+                , categoria = c
+                , dataDaTransacaoBR = dt
+                , tipoTransacao = tp
+                }
+            ])
 
-adicionarReceita :: [Transacao] -> IO [Transacao]
-adicionarReceita ts = cadastrar Receita ts
-
-adicionarDespesa :: [Transacao] -> IO [Transacao]
-adicionarDespesa ts = cadastrar Despesa ts
-
-
--- ---------- Relatorios na tela ----------
-
--- impressao recursiva
 exibirTransacoes :: [Transacao] -> IO ()
-exibirTransacoes []          = putStrLn "Nenhuma transacao cadastrada ainda."
-exibirTransacoes [t]         = putStr (textoTransacao t)
-exibirTransacoes (t : resto) = do
-    putStr (textoTransacao t)
-    putStrLn linha
-    exibirTransacoes resto
+exibirTransacoes [] = putStrLn "Nenhuma transacao cadastrada ainda."
+exibirTransacoes ts =
+    putStr (intercalate (linha ++ "\n") (map textoTransacao ts))
 
 exibirMaiorGasto :: [Transacao] -> IO ()
 exibirMaiorGasto ts =
@@ -299,24 +281,23 @@ exibirMaiorGasto ts =
         Just t  -> do
             putStrLn ("Descricao: " ++ descricao t)
             putStrLn ("Categoria: " ++ categoria t)
-            putStrLn ("Valor....: " ++ formatCurrency (valor t))
-
-imprimirCategorias :: [(String, Double)] -> IO ()
-imprimirCategorias []               = return ()
-imprimirCategorias ((c, v) : resto) = do
-    putStrLn (c ++ ": " ++ formatCurrency v)
-    imprimirCategorias resto
+            putStrLn ("Valor....: " ++ formatCurrency (valorT t))
 
 exibirGastosCategoria :: [Transacao] -> IO ()
-exibirGastosCategoria ts =
-    let lista = ordenarPorValor (itemsRelatorio (gastosPorCategoria ts))
-    in if null lista
-          then putStrLn "Nenhuma despesa cadastrada."
-          else imprimirCategorias lista
+exibirGastosCategoria ts
+    | null lista = putStrLn "Nenhuma despesa cadastrada."
+    | otherwise = putStr (unlines [ c ++ ": " ++ formatCurrency v | (c, v) <- lista ])
+  where
+    lista = ordenarPorValor (itemsRelatorio (gastosPorCategoria ts))
+
+exibirTotal :: String -> Valor -> Int -> IO ()
+exibirTotal nomeTotal valorTotal quantidadeTotal = do
+    putStrLn ("Total de " ++ nomeTotal ++ " : " ++ formatCurrency valorTotal)
+    putStrLn ("Quantidade        : " ++ show quantidadeTotal)
 
 buscarCategoriaIO :: [Transacao] -> IO ()
 buscarCategoriaIO ts = do
-    cat <- lerTexto "Categoria que deseja buscar: "
+    cat <- lerCampo "Categoria que deseja buscar: " naoVazio "Campo obrigatorio."
     let achadas = buscarCategoria cat ts
     putStrLn ""
     if null achadas
@@ -328,18 +309,17 @@ buscarCategoriaIO ts = do
             putStrLn linha
             putStrLn ("Total movimentado: " ++ formatCurrency (somaValores achadas))
 
--- Resumo (Monoid)
 exibirRelatorio :: [Transacao] -> IO ()
 exibirRelatorio ts = do
-    let r = gerarResumo ts
+    let resumoAtual = gerarResumo ts
     putStrLn "========== RELATORIO COMPLETO =========="
     putStrLn ""
-    putStrLn ("Quantidade de receitas : " ++ show (quantidadeReceitasResumo r))
-    putStrLn ("Quantidade de despesas : " ++ show (quantidadeDespesasResumo r))
-    putStrLn ("Total de receitas      : " ++ formatCurrency (totalReceitasResumo r))
-    putStrLn ("Total de despesas      : " ++ formatCurrency (totalDespesasResumo r))
-    putStrLn ("Saldo atual            : " ++ formatCurrency (saldoSummary r))
-    putStrLn ("Media de gastos        : " ++ formatCurrency (mediaDespesas ts))
+    putStrLn ("Quantidade de receitas : " ++ show (quantidadeReceitasResumo resumoAtual))
+    putStrLn ("Quantidade de despesas : " ++ show (quantidadeDespesasResumo resumoAtual))
+    putStrLn ("Total de receitas      : " ++ formatCurrency (totalReceitasResumo resumoAtual))
+    putStrLn ("Total de despesas      : " ++ formatCurrency (totalDespesasResumo resumoAtual))
+    putStrLn ("Saldo atual            : " ++ formatCurrency (saldoSummary resumoAtual))
+    putStrLn ("Media de gastos        : " ++ formatCurrency (mediaResumo resumoAtual))
     putStrLn ""
     putStrLn "--- Maior gasto ---"
     exibirMaiorGasto ts
@@ -352,8 +332,8 @@ exibirRelatorio ts = do
     putStrLn ""
     putStrLn "========================================"
 
+-- 8. MENU E LOOP PRINCIPAL
 
--- 7. MENU E LOOP PRINCIPAL
 menu :: IO ()
 menu = putStr (unlines
     [ ""
@@ -372,68 +352,39 @@ menu = putStr (unlines
     , "============================================="
     ])
 
--- A lista e o argumento da funcao
--- Recursao com a lista nova a cada chamada
+consultar :: String -> [Transacao] -> IO ()
+consultar op ts =
+    case op of
+        "3"  -> do putStrLn "--- TODAS AS TRANSACOES ---"
+                   exibirTransacoes ts
+        "4" -> putStrLn ("Saldo atual: " ++ formatCurrency (calcularSaldo ts))
+        "5" -> exibirTotal "receitas" (totalReceitas ts) (contar (receitas ts))
+        "6" -> exibirTotal "despesas" (totalDespesas ts) (contar (despesas ts))
+        "7"  -> do putStrLn "--- MAIOR GASTO ---"
+                   exibirMaiorGasto ts
+        "8" -> do
+            putStrLn ("Media de gastos   : " ++ formatCurrency (mediaDespesas ts))
+            putStrLn ("Quantidade        : " ++ show (contar (despesas ts)))
+        "9" -> buscarCategoriaIO ts
+        "10" -> exibirRelatorio ts
+        _    -> putStrLn "Opcao invalida! Digite um numero de 0 a 10."
+
 loop :: [Transacao] -> IO ()
 loop ts = do
     menu
     opcao <- lerLinha "Escolha uma opcao: "
     putStrLn ""
     case aparar opcao of
-
-        "1" -> do
-            novaLista <- adicionarReceita ts
-            loop novaLista
-
-        "2" -> do
-            novaLista <- adicionarDespesa ts
-            loop novaLista
-
-        "3" -> do
-            putStrLn "--- TODAS AS TRANSACOES ---"
-            exibirTransacoes ts
-            loop ts
-
-        "4" -> do
-            putStrLn ("Saldo atual: " ++ formatCurrency (calcularSaldo ts))
-            loop ts
-
-        "5" -> do
-            putStrLn ("Total de receitas : " ++ formatCurrency (totalReceitas ts))
-            putStrLn ("Quantidade        : " ++ show (contar (receitas ts)))
-            loop ts
-
-        "6" -> do
-            putStrLn ("Total de despesas : " ++ formatCurrency (totalDespesas ts))
-            putStrLn ("Quantidade        : " ++ show (contar (despesas ts)))
-            loop ts
-
-        "7" -> do
-            putStrLn "--- MAIOR GASTO ---"
-            exibirMaiorGasto ts
-            loop ts
-
-        "8" -> do
-            putStrLn ("Media de gastos: " ++ formatCurrency (mediaDespesas ts))
-            putStrLn ("Quantidade        : " ++ show (contar (despesas ts)))
-            loop ts
-
-        "9" -> do
-            buscarCategoriaIO ts
-            loop ts
-
-        "10" -> do
-            exibirRelatorio ts
-            loop ts
-
         "0" -> putStrLn "Encerrando o sistema. Ate logo!"
+        "1" -> do novaLista <- cadastrar Receita ts
+                  loop novaLista
+        "2" -> do novaLista <- cadastrar Despesa ts
+                  loop novaLista
+        op  -> do consultar op ts
+                  loop ts
 
-        _   -> do
-            putStrLn "Opcao invalida! Digite um numero de 0 a 10."
-            loop ts
+-- 9. DADOS DE EXEMPLO E PONTO DE ENTRADA
 
-
--- 8. DADOS DE EXEMPLO
 transacoesIniciais :: [Transacao]
 transacoesIniciais =
     [ Transacao "Salario"        3500.00 "Trabalho"     "05/06/2026" Receita
@@ -444,8 +395,6 @@ transacoesIniciais =
     , Transacao "Aluguel"        1200.00 "Moradia"      "10/06/2026" Despesa
     ]
 
-
--- 7. PONTO DE ENTRADA
 main :: IO ()
 main = do
     hSetEncoding stdout utf8
