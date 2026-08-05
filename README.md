@@ -222,7 +222,7 @@ terminal já é UTF-8.
 - **`ts ++ [nova]` no cadastro** ([`cadastrar`](Main.hs)) é O(n), porque em estruturas
   persistentes a concatenação copia o caminho até o ponto alterado. Usar `nova : ts`
   seria O(1), mas inverteria a ordem cronológica da listagem. Como a lista é pequena,
-  a legibilidade venceu — é uma escolha consciente, não descuido.
+  consideramos melhor manter a legibilidade.
 - **Uma só função de leitura.** `lerCampo` recebe o validador como parâmetro, então
   não existem `lerTexto`/`lerValor`/`lerData` separadas repetindo a mesma estrutura.
 - **`Either` não foi usado.** Ele daria mensagens de erro tipadas (em vez de `Maybe` +
